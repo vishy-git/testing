@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Step Form</title>
+
+    <!-- jQuery & jQuery UI -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/smoothness/jquery-ui.css">
+
+    <style>
+      body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+      }
+
+      .form-container {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+      }
+
+      .step {
+        display: none;
+      }
+
+      .step.active {
+        display: block;
+      }
+
+      .nav-bar {
+        display: flex;
+        justify-content: space-between;
+        padding: 10px;
+        border-top: 1px solid #ccc;
+        background-color: #f1f1f1;
+      }
+
+      button {
+        padding: 10px 20px;
+        border: none;
+        background-color: #4285f4;
+        color: white;
+        border-radius: 5px;
+        font-size: 16px;
+      }
+
+      .options-container {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+      }
+
+      .option-btn {
+        padding: 10px 15px;
+        border-radius: 20px;
+        background-color: #e0e0e0;
+        border: none;
+        cursor: pointer;
+      }
+
+      .option-btn.selected {
+        background-color: #4285f4;
+        color: white;
+      }
+
+      input, textarea {
+        width: 100%;
+        padding: 10px;
+        margin-top: 10px;
+        box-sizing: border-box;
+      }
+
+      @media (max-width: 600px) {
+        .options-container {
+          flex-direction: column;
+        }
+      }
+    </style>
+
+    <script>
+      let currentStep = 0;
+      const steps = [];
+
+      const bhajanTimes = ["5:30 pm","6:00 pm"];
+      const arathiTimes = ["7:00 pm","7:30 pm","8:00 pm"];
+
+      function showStep(index) {
+        $('.step').removeClass('active');
+        $(steps[index]).addClass('active');
+        $('#prevBtn').toggle(index > 0);
+        $('#nextBtn').toggle(index < steps.length - 1);
+        $('#submitBtn').toggle(index === steps.length - 1);
+        currentStep = index;
+      }
+
+      function nextStep() {
+        if (currentStep < steps.length - 1) showStep(currentStep + 1);
+      }
+
+      function prevStep() {
+        if (currentStep > 0) showStep(currentStep - 1);
+      }
+
+      function selectOption(id, value) {
+        const container = document.getElementById(id);
+        Array.from(container.getElementsByClassName("option-btn")).forEach(btn => {
+          btn.classList.remove("selected");
+        });
+        const selected = Array.from(container.getElementsByClassName("option-btn"))
+                              .find(btn => btn.dataset.value === value);
+        if (selected) selected.classList.add("selected");
+        document.getElementById(id + "_value").value = value;
+
+        if (id === 'bhajanTime') {
+          updateArathiChoices(value);
+          document.getElementById('arathiTime_value').value = '';
+          $('#arathiTime .option-btn').removeClass('selected');
+        }
+      }
+
+      function updateDatepickerAvailability(date) {
+        // Sample logic: disable weekends
+        return [date.getDay() !== 0 && date.getDay() !== 6];
+      }
+
+      function onDateSelected(dateText) {
+        document.getElementById('bhajanDate').value = dateText;
+        updateBhajanChoices(dateText);
+        document.getElementById('bhajanTime_value').value = '';
+        $('#bhajanTime .option-btn').removeClass('selected');
+      }
+
+      function updateBhajanChoices(dateStr) {
+        bhajanTimes.length = 0;
+        bhajanTimes.push("10:00 AM", "4:00 PM", "7:00 PM");
+        renderOptions('bhajanTime', bhajanTimes);
+      }
+
+      function updateArathiChoices(bhajanTime) {
+        arathiTimes.length = 0;
+        arathiTimes.push("Immediately After", "30 mins Later", "Not Required");
+        renderOptions('arathiTime', arathiTimes);
+      }
+
+      function renderOptions(id, options) {
+        const container = document.getElementById(id);
+        container.innerHTML = '<input type="hidden" id="' + id + '_value" name="' + id + '" />';
+        const wrapper = document.createElement('div');
+        wrapper.className = 'options-container';
+        options.forEach(opt => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'option-btn';
+          btn.dataset.value = opt;
+          btn.textContent = opt;
+          btn.onclick = () => selectOption(id, opt);
+          wrapper.appendChild(btn);
+        });
+        container.appendChild(wrapper);
+      }
+
+      function submitForm() {
+        const formData = document.getElementById('mainForm');
+        google.script.run
+          .withSuccessHandler(function(response) {
+            alert('Form submitted successfully!');
+          })
+          .withFailureHandler(function(error) {
+            alert('Error: ' + error.message);
+          })
+          .submitFormData(formData);
+      }
+
+      function loadForm() {
+        steps.push(...document.querySelectorAll('.step'));
+        showStep(0);
+
+        $("#datepicker").datepicker({
+          beforeShowDay: updateDatepickerAvailability,
+          onSelect: onDateSelected
+        });
+
+        renderOptions('update', ["Update info", "Reschedule", "Cancel"]);
+
+        google.script.run
+          .withSuccessHandler(function(data) {
+            console.log("Initial data received:", data);
+            // Use the array if needed
+          })
+          .getInitialData();
+      }
+
+      window.onload = loadForm;
+    </script>
+  </head>
+
+  <body>
+    <form id="mainForm" class="form-container">
+
+      <div id="step1" class="step active">
+        <h2>Welcome</h2>
+        <p>This form will guide you through a few steps to update your information or schedule a service.</p>
+        <p>Please proceed using the navigation below.</p>
+      </div>
+
+      <div id="step2" class="step">
+        <h2>How can we help?</h2>
+        <p>Please choose one of the following:</p>
+        <div id="update"></div>
+      </div>
+
+      <div id="step3" class="step">
+        <h2>Reason</h2>
+        <p>Please explain briefly:</p>
+        <textarea id="reason" name="reason" rows="4"></textarea>
+      </div>
+
+      <div id="step4" class="step">
+        <h2>Your Contact Info</h2>
+        <label>Name:</label><input type="text" name="name">
+        <label>Address:</label><input type="text" name="address">
+        <label>Phone:</label><input type="tel" name="phone">
+        <label>Email:</label><input type="email" name="email">
+      </div>
+
+      <div id="step5" class="step">
+        <h2>Select a Date</h2>
+        <p>Pick a date for your Bhajan:</p>
+        <div id="datepicker"></div>
+        <input type="hidden" id="bhajanDate" name="bhajanDate">
+      </div>
+
+      <div id="step6" class="step">
+        <h2>Bhajan Time</h2>
+        <p>Select your preferred time:</p>
+        <div id="bhajanTime"></div>
+      </div>
+
+      <div id="step7" class="step">
+        <h2>Arathi Time</h2>
+        <p>Select your preferred time:</p>
+        <div id="arathiTime"></div>
+      </div>
+
+      <div id="step8" class="step">
+        <h2>Additional Info</h2>
+        <p>Provide any additional details:</p>
+        <textarea id="additionalInfo" name="additionalInfo" rows="4"></textarea>
+      </div>
+    </form>
+
+    <div class="nav-bar">
+      <button id="prevBtn" onclick="prevStep()" type="button">Prev</button>
+      <button id="nextBtn" onclick="nextStep()" type="button">Next</button>
+      <button id="submitBtn" onclick="submitForm()" type="button" style="display:none;">Submit</button>
+    </div>
+  </body>
+</html>
